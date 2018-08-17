@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Bootstrap Example</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+		
+		<style>
+			body {
+				background-color: #f5f7f8;
+				font-family: verdana;
+			}
+		
+			label {
+				text-transform: uppercase;
+			}
+			
+			p {
+				margin: 15px 0;
+			}
+			
+			p:last-child {
+				margin-bottom: 0px;
+			}
+			
+			.container {
+				margin-top: 25px;
+			}
+			
+			.getlocation {
+				float: right;
+				cursor: pointer;
+			}
+			
+			.result {
+				background-color: #FFF;
+				margin-top: 15px;
+				padding: 15px;
+			}
+			
+			#demo {
+				display: none;
+				text-align: center;
+			}
+		</style>
+	</head>
+	
+	<body>
+		<div class="container">		
+			<div class="row">
+				<div class="col-sm-6" id="locations">
+					<form method="POST" onsubmit="onSubmit()" id="nearest" action="/query">
+						<label for="address">Enter your location</label> 
+						<a onclick="getLocation()" class="getlocation">Use my current location</a>
+						
+						<div class="input-group">
+							<input type="text" class="form-control" name="address" id="address" placeholder="Enter your city, state, or Zip code." value="{{if .Address}}{{.Address}}{{end}}">
+							<input name="longitude" id="longitude" type="hidden" value="" />
+							<input name="latitude" id="latitude" type="hidden" value="" />
+							
+							<span class="input-group-btn">
+								<input type="submit" value="GO" class="btn btn-danger" />
+							</span>	
+						</div>
+					</form>
+						
+					<p id="error"></p>
+					
+					{{if not .Response}}
+						<p id="demo">We're sorry, but there are no locations within 3,000 meters.</p>
+					{{end}}
+					
+					{{range $i, $a := .Response}}
+						<div class="result" ref="{{$i}}"><a name="{{$i}}"></a>
+							{{$i}}. {{.Name}} 
+							{{if .Address}}<br />{{.Address}}{{end}}
+							{{if .City}}<br />{{.City}}{{end}}
+							<br /><a href="https://www.google.com/maps/dir/{{$.Latitude}},{{$.Longitude}}/{{.Latitude}},{{.Longitude}}" target="_blank">Directions ({{printf "%.2f" .Distance}} miles)</a>
+							{{if .Phone}}<br /><a href="tel:{{.Phone}}">{{.Phone}}</a>{{end}}
+							
+							{{if .Hours}}
+								<p><strong style="font-family: tahoma;">Today's Hours:</strong> {{index .Hours .Present}}</p>
+							
+								<div>Sunday {{index .Hours 0}}
+								<br />Monday {{index .Hours 1}}
+								<br />Tuesday {{index .Hours 2}}
+								<br />Wednesday {{index .Hours 3}}
+								<br />Thursday {{index .Hours 4}}
+								<br />Friday {{index .Hours 5}}
+								<br />Saturday {{index .Hours 6}}</div>
+							{{end}}
+						</div>					
+					{{end}}
+					<div class="page" ref="porto" id="porto" style="margin-top: 1000px;">
+						Porto page
+					</div>
+				</div>
+				
+				
+				{{if .Response}}
+					<div class="col-sm-6" id="map">
+						{{if .Longitude}}
+							<!--<img src="https://maps.googleapis.com/maps/api/staticmap?center={{.Latitude}},{{.Longitude}}&zoom=13&size=600x600&maptype=roadmap{{if .Response}}{{range $j, $b := .Response}}&markers=color:red%7Clabel:{{$j}}%7C{{.Latitude}},{{.Longitude}}{{end}}{{end}}&key=AIzaSyAxoe8jkfWsjJdySDPXVvgbbgxJ7ZL6g2Y" alt="Nearest Locations" />-->							
+							<gmap-map
+								:center="center"
+								:zoom="13"
+								style="width: 600px; height: 600px"
+							>
+
+							<gmap-marker
+								v-for="m in markers"
+								:position="{lat: m.position[0], lng: m.position[1]}"
+								:clickable="true"
+								:draggable="false"
+							></gmap-marker>
+							
+							</gmap-map>
+						{{end}}
+					</div>
+				{{end}}
+			</div>
+		</div>
+		
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.1.6/vue.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.16.4/lodash.js"></script>
+		<script src="https://xkjyeah.github.io/vue-google-maps/vue-google-maps.js"></script>
+		
+		<script>
+			var longitude = document.getElementById("longitude");
+			var latitude = document.getElementById("latitude");
+			var error = document.getElementById("error");
+			var address = document.getElementById("address");
+			var map = document.getElementById('map');
+			var action = document.getElementById("nearest").action;
+			var demo = document.getElementById("demo");
+			
+			if (map == null) {
+				document.getElementById("locations").classList.remove('col-sm-6');
+				document.getElementById("locations").classList.add('col-sm-12');
+			}
+			
+			if (window.location.href.indexOf("query") > -1) {
+				if (demo) {
+					demo.style.display = "block";
+				}
+			}
+			
+			function onSubmit() {
+				if (longitude.value == "" && address.value != "") {
+					action = "/query?address=" + address.value;
+				}
+			}
+
+			function getLocation() {
+				if (navigator.geolocation) {
+					navigator.geolocation.getCurrentPosition(showPosition);
+					
+				} else {
+					error.innerHTML = "Geolocation is not supported by this browser.";
+				}
+			}
+			
+			function showPosition(position) {
+				address.value = "";
+				longitude.value = position.coords.longitude;
+				latitude.value = position.coords.latitude;
+				action = "/query?longitude=" + longitude.value + "&latitude=" + latitude.value;
+				document.getElementById('nearest').submit();
+			}
+			
+			Vue.use(VueGoogleMaps, {
+				load: {
+					key: 'AIzaSyBzlLYISGjL_ovJwAehh6ydhB56fCCpPQw'
+				},
+			});
+
+			// document.addEventListener('DOMContentLoaded', function() {
+			new Vue({
+				el: '#map',
+				data: {
+					center: {lat: {{.Latitude}}, lng: {{.Longitude}}},
+					statusText: '',
+					
+					markers: [
+					{{if .Response}}
+						{{range $k, $c := .Response}}
+							{
+								position: [{{.Latitude}}, {{.Longitude}}],
+								label: {{$k}},
+								text: {{$k}},
+							},
+						{{end}}
+					{{end}}
+					]
+				},
+				delimiters: ['${', '}']
+			});
+			// });
+		</script>
+	</body>
+</html>
